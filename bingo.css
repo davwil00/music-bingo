@@ -1,0 +1,47 @@
+* {
+    font-family: Helvetica, Arial, Sans-Serif;
+    text-rendering: geometricPrecision;
+}
+
+.emoji {
+    font-family: "Apple Color Emoji";
+}
+
+.container {
+    text-align: center;
+    page-break-inside: avoid;
+}
+
+h1 {
+    font-size: 24px;
+}
+
+table {
+    text-align: center;
+    border: thin black solid;
+    border-collapse: collapse;
+    table-layout: fixed;
+    margin: 0 auto;
+    width: 100%;
+}
+
+table + table {
+    margin-bottom: 20px;
+}
+
+td {
+    border: thin black solid;
+    padding: 4px;
+    line-height: 1.3em;
+    height: 100px;
+    width: 20%;
+}
+
+p {
+    text-align: right;
+}
+
+.artist {
+    font-weight: bold;
+}
+
