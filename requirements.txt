@@ -1,4 +1,4 @@
 pdfkit==0.6.1
 pydub==0.23.1
 requests==2.22.0
-spotipy==2.7.1
+spotipy==2.22.1
