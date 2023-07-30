@@ -87,5 +87,3 @@ def strip_additional_info(string: str) -> str:
     result = version.sub('', result)
     return result
 
-
-print(convert_to_number(strip_additional_info('The Number of the Beast - 2015 Remaster')))

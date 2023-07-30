@@ -15,38 +15,45 @@ import requests
 import spotipy
 from pydub import AudioSegment
 from spotipy import Spotify, oauth2
-from spotipy.oauth2 import SpotifyClientCredentials
+from spotipy.oauth2 import SpotifyClientCredentials, SpotifyOAuth
 
 from number_decoder import strip_additional_info, convert_to_number
 from playlist import Playlist
 from track import Track
+from dotenv import load_dotenv
 
 TRACKS_PER_SHEET = 15
-NUMBER_OF_SHEETS = 30
+NUMBER_OF_SHEETS = 10
 
 BingoSheet = Set[Tuple[Track]]
 
 
+load_dotenv()
+
+
 def cc_auth() -> Spotify:
     client_credentials_manager = SpotifyClientCredentials()
-    # return spotipy.Spotify(client_credentials_manager=client_credentials_manager)
-    return spotipy.Spotify('')
+    return spotipy.Spotify(client_credentials_manager=client_credentials_manager)
+    # return spotipy.Spotify('')
 
 
 def prompt_for_auth():
-    print('prompt')
-    config = configparser.ConfigParser()
-    config.read('props.ini')
-    sp_oauth = oauth2.SpotifyOAuth(config['Authorization']['SPOTIPY_CLIENT_ID'],
-                                   config['Authorization']['SPOTIPY_CLIENT_SECRET'], "http://localhost:8000")
-    auth_url = sp_oauth.get_authorize_url()
-    webbrowser.open(auth_url)
+    # print('prompt')
+    # config = configparser.ConfigParser()
+    # config.read('props.ini')
+    # sp_oauth = oauth2.SpotifyOAuth(config['Authorization']['SPOTIPY_CLIENT_ID'],
+    #                                config['Authorization']['SPOTIPY_CLIENT_SECRET'], "http://localhost:8000")
+    # auth_url = sp_oauth.get_authorize_url()
+    # webbrowser.open(auth_url)
+
+    return spotipy.Spotify(auth_manager=SpotifyOAuth(scope='user-library-read'))
 
 
 def fetch_playlist_tracks(playlist_id) -> Playlist:
     print('Fetching tracks')
-    spotify = cc_auth()
-    results = spotify.playlist(playlist_id, fields='name,tracks(items(track(preview_url,name,artists(name))))', market='GB')
+    spotify = prompt_for_auth()
+    results = spotify.playlist(playlist_id, fields='name,tracks(items(track(preview_url,name,artists(name))))',
+                               market='GB')
     tracks = []
     for item in results['tracks']['items']:
         tracks.append(Track(item['track']['artists'][0]['name'],
@@ -100,7 +107,8 @@ def download_preview(url: string, filename: string, folder: str):
         file.write(raw.read())
 
 
-def create_bingo_sheet_pdf(bingo_sheets: BingoSheet, name: str, formatters: Tuple[Callable[[str], str], Callable[[str], str]]):
+def create_bingo_sheet_pdf(bingo_sheets: BingoSheet, name: str,
+                           formatters: Tuple[Callable[[str], str], Callable[[str], str]]):
     artist_formatter, track_formatter = formatters
     print(f'Creating bingo sheet for {name}')
     date = datetime.datetime.now()
@@ -143,19 +151,52 @@ def create_bingo_sheet_pdf(bingo_sheets: BingoSheet, name: str, formatters: Tupl
     pdfkit.from_string(html, f'output/bingo-{name}.pdf', options=options, css='bingo.css')
 
 
+def create_bingo_sheet_mobile(bingo_sheets: BingoSheet, name: str,
+                              formatters: Tuple[Callable[[str], str], Callable[[str], str]]):
+    artist_formatter, track_formatter = formatters
+    print(f'Creating bingo sheets for {name}')
+    date = datetime.datetime.now()
+    os.makedirs(f'output/{name}', exist_ok=True)
+    for sheet_no, sheet in enumerate(bingo_sheets):
+        html = '''<!DOCTYPE html><html><head><meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
+<link type="text/css" rel="stylesheet" href="bingo-mob.css">
+    </head><body>'''
+        html += '''
+<h1><span class="emoji">&#x1f3b6;&#x1f3b6;</span>&nbsp; DJ Williams' Music Bingo &nbsp;&#x1f3b6;&#x1f3b6;</h1>
+<div class="container">
+'''
+        for track_no, track in enumerate(sheet):
+            formatted_track_name = track_formatter(track.name)
+            formatted_artist = artist_formatter(track.artist)
+            html += f'<div class="cell">{formatted_track_name}<br/><span class="artist">{formatted_artist}</span></div>\n'
+        html += f'''
+    <p>{date.strftime("%y-%m-%d")} T{sheet_no}</p>
+    </div>
+    <script src="bingo.js"></script>
+'''
+        html += '</body></html>'
+
+        with open(f'output/{name}/bingo-{sheet_no}.html', 'w') as file:
+            file.write(html)
+
+
 def create_single_track(playlist):
     print('Merging tracks')
     whoosh = AudioSegment.from_wav('whoosh.wav')
     single_track = AudioSegment.empty()
+    fifteen_seconds = 15 * 1000
     for track in playlist.tracks:
         filename = f'tracks/{playlist.name}/{track.artist} - {track.name}.mp3'
         if path.exists(filename):
-            single_track.append(AudioSegment.from_mp3(filename), 0)
-            single_track.append(whoosh, 0)
+            sample = AudioSegment.from_mp3(filename)
+            first_15_seconds = sample[:fifteen_seconds]
+            single_track = single_track + first_15_seconds
+            single_track = single_track + whoosh
         else:
             print(f'Unable to find track {filename}', file=sys.stderr)
 
-    single_track.export(f'output/bingo-{playlist.name}.mp3')
+    single_track.export(f'output/bingo-{playlist.name}.mp3', format='mp3')
 
 
 def run(playlist_id: str, formatters: Tuple[Callable[[str], str], Callable[[str], str]]):
@@ -177,7 +218,7 @@ def run(playlist_id: str, formatters: Tuple[Callable[[str], str], Callable[[str]
                 break
         attempt_num += 1
     print_winners(playlist.name, winners_in_rounds)
-    create_bingo_sheet_pdf(bingo_sheets, playlist.name, formatters)
+    create_bingo_sheet_mobile(bingo_sheets, playlist.name, formatters)
     download_tracks(playlist)
     create_single_track(playlist)
 
@@ -191,4 +232,6 @@ def print_winners(playlist_name: str, winners_in_rounds: List[List[int]]):
 
 
 # run('0eScwH7KiLfkSBeHCYwKsz', lambda s: strip_additional_info(s))
-run('6z7f5NZTRJ7WGkj5Z9HiYl', (lambda x: '', lambda s: convert_to_number(strip_additional_info(s))))
+# run('3yNiQv3nB44Y4S747i5CZc', (lambda x: x, lambda s: s))
+## https://open.spotify.com/playlist/2BJLJm2d7TZv7gGHn2lAwh?si=2390d772702a45e3
+run('2BJLJm2d7TZv7gGHn2lAwh', (lambda s: s, lambda s: strip_additional_info(s)))

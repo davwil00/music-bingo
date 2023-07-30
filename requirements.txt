@@ -1,4 +1,6 @@
-pdfkit==0.6.1
-pydub==0.23.1
-requests==2.22.0
-spotipy==2.7.1
+pdfkit~=1.0.0
+pydub~=0.25.1
+requests~=2.31.0
+spotipy~=2.23.0
+
+python-dotenv~=1.0.0
